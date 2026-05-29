@@ -1,10 +1,8 @@
-const CACHE = 'fincopilot-v4';
+const CACHE = 'fincopilot-v5';
 const PRECACHE = [
   'index.html',
   'styles.css',
   'app.js',
-  'config.js',
-  'config.example.js',
   'manifest.json',
   'icon.svg',
   'icon-192.png',
@@ -25,6 +23,12 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+
+  // Bypass cache entirely for dynamic config files containing API keys
+  if (url.pathname.endsWith('config.js') || url.pathname.endsWith('config.example.js')) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
 
   if (url.origin !== location.origin) {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
