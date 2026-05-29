@@ -99,6 +99,52 @@ html, body {
   }
 }
 
+/* --- Recolher o chat no desktop (Painel em tela cheia) --- */
+.collapse-chat-btn {
+  padding: 0.45rem;
+}
+
+.reopen-chat-btn {
+  display: none;
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 150;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1.1rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+@media (min-width: 1024px) {
+  .app-container.chat-collapsed {
+    grid-template-columns: 1fr;
+  }
+  .app-container.chat-collapsed .chat-column {
+    display: none;
+  }
+  .app-container.chat-collapsed .reopen-chat-btn {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 1023px) {
+  .collapse-chat-btn {
+    display: none;
+  }
+  .reopen-chat-btn {
+    display: none !important;
+  }
+}
+
 /* --- Columns Styling --- */
 .dashboard-column {
   padding: 2.5rem;

@@ -831,6 +831,7 @@ function initEventListeners() {
 
     initTabNavigation();
     initCameraOCR();
+    initChatCollapse();
   } catch (err) {
     console.error("❌ Erro ao inicializar ouvintes de eventos:", err);
   }
@@ -983,7 +984,7 @@ Data Atual do Sistema: ${new Date().toLocaleDateString("pt-BR")}. O mês tem ${n
 
 INSTRUÇÕES CRÍTICAS DE RESPOSTA (JSON MODE):
 Você deve responder ESTRITAMENTE em formato JSON. O JSON deve conter três chaves:
-1. "reply": A mensagem textual formatada em português brasileiro. Use markdown básico para destacar valores importantes em negrito (**R$ 150,00**), use emojis, e dê conselhos amigáveis e proativos. Seja divertida, encorajadora e perspicaz.
+1. "reply": A mensagem textual formatada em português brasileiro. Esta chave é OBRIGATÓRIA e NUNCA pode ser vazia ou omitida — mesmo quando você registra uma despesa ou atualiza o plano, sempre escreva uma confirmação amigável aqui. Use markdown básico para destacar valores importantes em negrito (**R$ 150,00**), use emojis, e dê conselhos amigáveis e proativos. Seja divertida, encorajadora e perspicaz.
 2. "transaction": Caso a mensagem represente o REGISTRO REAL de uma nova despesa (ex: "gastei 50 no mercado", "comprei leite por 8 reais", "paguei 30 de uber"), preencha este objeto. Caso contrário, null.
 3. "setup": Caso o usuário esteja em fase de parametrização inicial (quando a Renda Mensal Líquida é R$ 0) ou atualizando parâmetros de seu plano (como renda, reserva, despesas fixas ou limites de categorias) por conversa, você deve retornar um objeto com os valores extraídos para preencher o site dinamicamente. Se não houver alteração de plano, passe null.
    O objeto "setup" deve ter a seguinte estrutura opcional (preencha apenas o que foi conversado ou atualizado):
@@ -1005,6 +1006,8 @@ CONVERSA DE PARAMETRIZAÇÃO / ONBOARDING (MUITO IMPORTANTE):
 Se o usuário ainda não tiver plano (Renda = R$ 0), conduza uma conversa passo a passo amigável. Não tente preencher tudo de uma vez se ele não informou.
 Passo 1: Peça a Renda e a Poupança. Assim que ele disser (ex: "ganho 5000 e quero guardar 10%"), salve esses valores no "setup" e pergunte sobre as despesas fixas (ex: aluguel, condomínio, luz).
 Passo 2: À medida que ele disser as despesas fixas, monte a lista em "fixedExpenses" e pergunte como ele quer dividir o saldo flexível restante nas 4 categorias (Alimentação, Lazer, Transporte e Outros). Se ele falar de apenas uma (ex: "quero 800 de limite para comida"), salve no "setup" de categorias e continue guiando as outras.
+   IMPORTANTE — entradas curtas: o usuário costuma informar despesas de forma abreviada e em CAIXA ALTA, com ou sem dois-pontos, e às vezes com erros de digitação. Interprete sempre. Exemplos: "ALUGUEL 500", "ALUGUES: 500 REAIS", "aluguel 500" → uma despesa fixa { "name": "Aluguel", "amount": 500 }. "CARRO 1250" → { "name": "Carro", "amount": 1250 }. NUNCA responda que não entendeu uma despesa nesse formato — extraia o nome e o valor e confirme.
+   ATENÇÃO: a lista "fixedExpenses" SUBSTITUI a anterior. Portanto, ao receber uma nova despesa, devolva a lista COMPLETA e acumulada (todas as despesas já informadas + a nova), olhando o campo "Despesas Fixas Cadastradas" do estado atual.
 Passo 3: Assim que os limites forem definidos, finalize parabenizando e encerre o onboarding.
 
 Exemplo de saída de onboarding (usuário disse que ganha 5000 e quer poupar 15%):
@@ -1022,7 +1025,12 @@ Exemplo de saída de onboarding (usuário disse que ganha 5000 e quer poupar 15%
     { role: "system", content: systemPrompt }
   ];
 
+  // Mensagens de contingência da própria Sofia não devem voltar como histórico,
+  // senão poluem o contexto e o modelo perpetua a confusão.
+  const fallbackMarkers = ["Hmm, não captei", "*Aviso:", "Desculpe, obtive uma resposta vazia"];
   state.messages.slice(-8).forEach(msg => {
+    const isFallback = msg.sender === "ai" && fallbackMarkers.some(m => (msg.text || "").startsWith(m));
+    if (isFallback) return;
     apiMessages.push({
       role: msg.sender === "ai" ? "assistant" : "user",
       content: msg.text
@@ -1513,6 +1521,25 @@ function initTabNavigation() {
         setTimeout(() => document.getElementById("chatInput")?.focus(), 300);
       }
     });
+  });
+}
+
+// --- RECOLHER / EXPANDIR CHAT (DESKTOP) ---
+// No desktop o Painel e o chat ficam lado a lado. Aqui permitimos recolher a coluna
+// do chat para o Painel ocupar a tela inteira, e reabri-la depois.
+function initChatCollapse() {
+  const container = document.querySelector(".app-container");
+  const collapseBtn = document.getElementById("collapseChatBtn");
+  const reopenBtn = document.getElementById("reopenChatBtn");
+  if (!container) return;
+
+  collapseBtn?.addEventListener("click", () => {
+    container.classList.add("chat-collapsed");
+  });
+
+  reopenBtn?.addEventListener("click", () => {
+    container.classList.remove("chat-collapsed");
+    setTimeout(() => document.getElementById("chatInput")?.focus(), 200);
   });
 }
 
