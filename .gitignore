@@ -1,5 +1,5 @@
-# Ignorar arquivos de chaves de API locais e configurações secretas
-config.js
+# config.js agora contém apenas chaves PÚBLICAS do Supabase (URL + anon), seguras
+# para versionar. A chave da IA (DeepSeek) fica como segredo na Edge Function.
 
 # Arquivos do sistema operacional e IDEs
 .DS_Store

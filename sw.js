@@ -1,4 +1,4 @@
-const CACHE = 'fincopilot-v5';
+const CACHE = 'fincopilot-v6';
 const PRECACHE = [
   'index.html',
   'styles.css',

@@ -18,8 +18,7 @@ const state = {
   },
   transactions: [],
   messages: [],
-  voiceResponseEnabled: false,
-  deepseekApiKey: ""
+  voiceResponseEnabled: false
 };
 
 // --- Safe Local Storage Wrapper ---
@@ -151,20 +150,21 @@ function loadState() {
   if (!Array.isArray(state.messages)) state.messages = [];
   if (state.voiceResponseEnabled === undefined) state.voiceResponseEnabled = false;
 
-  if (window.DEEPSEEK_API_KEY) {
-    state.deepseekApiKey = window.DEEPSEEK_API_KEY;
-    console.log("🔑 DeepSeek key carregada do config.js");
-  } else {
-    console.log("⚠️ Nenhuma chave DeepSeek no config.js");
-  }
   updateAIBadge();
+}
+
+// A IA "Sofia" responde através de uma Edge Function do Supabase, que guarda a
+// chave da DeepSeek como segredo no servidor. Logo, basta o Supabase estar
+// configurado (URL + anon key públicas) para a IA na nuvem estar disponível.
+function isCloudAIAvailable() {
+  return !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY);
 }
 
 function updateAIBadge() {
   const badge = document.getElementById("aiModeBadge");
   if (!badge) return;
-  if (state.deepseekApiKey && state.deepseekApiKey.trim() !== "") {
-    badge.textContent = "DeepSeek";
+  if (isCloudAIAvailable()) {
+    badge.textContent = "Sofia IA";
     badge.className = "ai-badge deepseek";
   } else {
     badge.textContent = "Local";
@@ -566,7 +566,6 @@ function openSetupModal(isFirstTime = false) {
   document.getElementById("limitLazerInput").value = state.categories.lazer.limit || "";
   document.getElementById("limitTransporteInput").value = state.categories.transporte.limit || "";
   document.getElementById("limitOutrosInput").value = state.categories.outros.limit || "";
-  document.getElementById("deepseekApiKeyInput").value = state.deepseekApiKey || "";
 
   // Render Fixed Expenses rows
   renderFixedExpensesRows();
@@ -675,7 +674,6 @@ function saveSetupWizard() {
   state.income = incomeVal;
   state.savingsPercent = savingsPctVal;
   state.fixedExpenses = parsedExpenses;
-  state.deepseekApiKey = document.getElementById("deepseekApiKeyInput").value.trim();
   updateAIBadge();
 
   // Set limits
@@ -780,10 +778,6 @@ function initEventListeners() {
         });
         state.transactions = [];
         state.messages = [];
-        state.deepseekApiKey = "";
-        if (window.DEEPSEEK_API_KEY) {
-          state.deepseekApiKey = window.DEEPSEEK_API_KEY;
-        }
         updateAIBadge();
         
         saveState();
@@ -1036,30 +1030,29 @@ Exemplo de saída de onboarding (usuário disse que ganha 5000 e quer poupar 15%
   });
 
   try {
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    // Chamamos a Edge Function "chat" do Supabase, que repassa para a DeepSeek
+    // usando a chave guardada como segredo no servidor (nunca exposta aqui).
+    const response = await fetch(`${window.SUPABASE_URL}/functions/v1/chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${state.deepseekApiKey}`
+        "Authorization": `Bearer ${window.SUPABASE_ANON_KEY}`,
+        "apikey": window.SUPABASE_ANON_KEY
       },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: apiMessages,
-        response_format: { type: "json_object" },
-        temperature: 0.3
-      })
+      body: JSON.stringify({ messages: apiMessages })
     });
 
     // Remove o indicador visual de digitação
     const typingNode = document.getElementById(typingMessageId);
     if (typingNode) typingNode.remove();
 
+    const data = await response.json();
+
     if (!response.ok) {
-      throw new Error(`Servidor respondeu com código HTTP ${response.status}`);
+      throw new Error(data?.error || `Servidor respondeu com código HTTP ${response.status}`);
     }
 
-    const data = await response.json();
-    const rawContent = data.choices[0].message.content.trim();
+    const rawContent = (data.content || "").trim();
     const result = cleanAndParseJSON(rawContent);
 
     // 1. Se houver atualizações de configuração/onboarding (setup) enviadas pela IA
@@ -1119,19 +1112,16 @@ Exemplo de saída de onboarding (usuário disse que ganha 5000 e quer poupar 15%
     addMessage("ai", result.reply || "Desculpe, obtive uma resposta vazia.");
 
   } catch (error) {
-    console.error("DeepSeek API Error:", error);
+    console.error("Sofia AI (Edge Function) Error:", error);
     // Remove o indicador visual de digitação
     const typingNode = document.getElementById(typingMessageId);
     if (typingNode) typingNode.remove();
 
     // Fallback amigável de contingência para NLP Local
-    addMessage("ai", `*Aviso: Tivemos uma falha ao conectar com o DeepSeek (${error?.message || error || 'Erro indefinido'}). Carregando processamento local de contingência...*`);
+    addMessage("ai", `*Aviso: Tivemos uma falha ao conectar com a IA (${error?.message || error || 'Erro indefinido'}). Carregando processamento local de contingência...*`);
     setTimeout(() => {
-      // Bypassa temporariamente a chave API para forçar execução local
-      const tempKey = state.deepseekApiKey;
-      state.deepseekApiKey = "";
-      processSofiaAI(query);
-      state.deepseekApiKey = tempKey;
+      // Força o processamento local de contingência
+      processSofiaAI(query, true);
     }, 800);
   }
 }
@@ -1161,9 +1151,9 @@ function cleanAndParseJSON(text) {
 }
 
 // --- SOFIA AI NLP DECISION ENGINE ---
-function processSofiaAI(query) {
-  if (state.deepseekApiKey && state.deepseekApiKey.trim() !== "") {
-    console.log("🤖 Usando DeepSeek AI para:", query);
+function processSofiaAI(query, forceLocal = false) {
+  if (!forceLocal && isCloudAIAvailable()) {
+    console.log("🤖 Usando Sofia IA (nuvem) para:", query);
     processDeepSeekAI(query);
     return;
   }
