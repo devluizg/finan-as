@@ -53,7 +53,7 @@ const safeLocalStorage = {
 
 // --- Config and Constants ---
 const STORAGE_KEY = "fincopilot_state_v1";
-let supabase = null;
+let supabaseClient = null;
 let syncTimer = null;
 
 // Mapping category names to keys for robust NLP matching
@@ -108,7 +108,7 @@ if (document.readyState === "loading") {
 // --- Local Storage Hooks ---
 function saveState() {
   safeLocalStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  if (supabase) {
+  if (supabaseClient) {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncToSupabase, 500);
   }
@@ -184,7 +184,7 @@ function initSupabase() {
     return;
   }
   try {
-    supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    supabaseClient = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
     console.log("☁️ Supabase conectado:", window.SUPABASE_URL);
   } catch (e) {
     console.warn("⚠️ Erro ao conectar Supabase:", e?.message || e);
@@ -192,9 +192,9 @@ function initSupabase() {
 }
 
 async function syncFromSupabase() {
-  if (!supabase) return;
+  if (!supabaseClient) return;
   try {
-    const { data: sData } = await supabase
+    const { data: sData } = await supabaseClient
       .from("app_state").select("*").limit(1).maybeSingle();
     if (sData && sData.income > 0) {
       state.income = Number(sData.income) || 0;
@@ -210,13 +210,13 @@ async function syncFromSupabase() {
       }
     }
 
-    const { data: txs } = await supabase
+    const { data: txs } = await supabaseClient
       .from("transactions").select("*").order("id", { ascending: false }).limit(500);
     if (txs && txs.length > 0) {
       state.transactions = txs;
     }
 
-    const { data: msgs } = await supabase
+    const { data: msgs } = await supabaseClient
       .from("messages").select("*").order("created_at", { ascending: false }).limit(100);
     if (msgs && msgs.length > 0) {
       state.messages = msgs.reverse();
@@ -230,7 +230,7 @@ async function syncFromSupabase() {
 }
 
 async function syncToSupabase() {
-  if (!supabase) return;
+  if (!supabaseClient) return;
   try {
     const record = {
       income: state.income,
@@ -238,19 +238,19 @@ async function syncToSupabase() {
       fixed_expenses: state.fixedExpenses,
       categories: state.categories
     };
-    const { data: existing } = await supabase
+    const { data: existing } = await supabaseClient
       .from("app_state").select("id").limit(1).maybeSingle();
     if (existing) {
-      await supabase.from("app_state").update(record).eq("id", existing.id);
+      await supabaseClient.from("app_state").update(record).eq("id", existing.id);
     } else {
-      await supabase.from("app_state").insert(record);
+      await supabaseClient.from("app_state").insert(record);
     }
 
     if (state.transactions.length > 0) {
-      await supabase.from("transactions").upsert(state.transactions, { onConflict: "id" });
+      await supabaseClient.from("transactions").upsert(state.transactions, { onConflict: "id" });
     }
     if (state.messages.length > 0) {
-      await supabase.from("messages").upsert(state.messages, { onConflict: "id" });
+      await supabaseClient.from("messages").upsert(state.messages, { onConflict: "id" });
     }
   } catch (e) {
     console.warn("⚠️ Erro ao sincronizar com Supabase:", e?.message || e);
