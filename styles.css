@@ -1168,7 +1168,7 @@ h1, h2, h3, h4 {
    MOBILE BOTTOM NAVIGATION
    ========================================= */
 .mobile-nav {
-  display: none;
+  display: flex;
   position: fixed;
   bottom: 0;
   left: 0;

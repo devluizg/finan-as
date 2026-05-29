@@ -1055,6 +1055,9 @@ Exemplo de saída de onboarding (usuário disse que ganha 5000 e quer poupar 15%
     const rawContent = (data.content || "").trim();
     const result = cleanAndParseJSON(rawContent);
 
+    let planUpdated = false;
+    let txRegistered = false;
+
     // 1. Se houver atualizações de configuração/onboarding (setup) enviadas pela IA
     if (result.setup && typeof result.setup === "object") {
       const setup = result.setup;
@@ -1087,6 +1090,7 @@ Exemplo de saída de onboarding (usuário disse que ganha 5000 e quer poupar 15%
       if (hasChanges) {
         saveState();
         updateUI();
+        planUpdated = true;
       }
     }
 
@@ -1105,11 +1109,23 @@ Exemplo de saída de onboarding (usuário disse que ganha 5000 e quer poupar 15%
         state.categories[tx.category].spent += parseFloat(tx.amount);
         saveState();
         updateUI();
+        txRegistered = true;
       }
     }
 
-    // Exibe a resposta final da Sofia
-    addMessage("ai", result.reply || "Desculpe, obtive uma resposta vazia.");
+    // Exibe a resposta final da Sofia. Se a IA não devolveu texto mas executou uma
+    // ação (registrou plano/gasto), confirmamos em vez de mostrar "resposta vazia".
+    let replyText = (result.reply || "").trim();
+    if (!replyText) {
+      if (txRegistered) {
+        replyText = "Pronto, registrei seu gasto! ✅ Dá uma olhada no Painel pra ver suas margens.";
+      } else if (planUpdated) {
+        replyText = "Anotado! ✅ Atualizei seu plano. Pode continuar.";
+      } else {
+        replyText = "Hmm, não captei direito 🤔. Pode reformular ou me dar um pouco mais de detalhe?";
+      }
+    }
+    addMessage("ai", replyText);
 
   } catch (error) {
     console.error("Sofia AI (Edge Function) Error:", error);
