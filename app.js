@@ -24,6 +24,8 @@ const state = {
 
 // --- Config and Constants ---
 const STORAGE_KEY = "fincopilot_state_v1";
+let supabase = null;
+let syncTimer = null;
 
 // Mapping category names to keys for robust NLP matching
 const CATEGORY_MAP = {
@@ -34,8 +36,7 @@ const CATEGORY_MAP = {
 };
 
 // --- Application Startup Init ---
-document.addEventListener("DOMContentLoaded", () => {
-  // Initialize Lucide Icons
+document.addEventListener("DOMContentLoaded", async () => {
   if (typeof lucide !== "undefined") {
     lucide.createIcons();
   }
@@ -43,13 +44,16 @@ document.addEventListener("DOMContentLoaded", () => {
   loadState();
   checkMonthlyReset();
   registerSW();
+
+  if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+    initSupabase();
+    await syncFromSupabase();
+  }
+
   initEventListeners();
   initSpeechRecognition();
-
-  // Mantém o estado limpo ou carregado e atualiza a UI
   updateUI();
 
-  // Se o histórico de mensagens estiver vazio, envia a mensagem de boas-vindas
   if (state.messages.length === 0) {
     sendSofiaWelcomeMessage();
   } else {
@@ -60,6 +64,10 @@ document.addEventListener("DOMContentLoaded", () => {
 // --- Local Storage Hooks ---
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (supabase) {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncToSupabase, 500);
+  }
 }
 
 function loadState() {
@@ -73,9 +81,109 @@ function loadState() {
     }
   }
 
-  // Sincroniza a chave do arquivo config.js local caso ela esteja preenchida
-  if (window.DEEPSEEK_API_KEY && (!state.deepseekApiKey || state.deepseekApiKey.trim() === "")) {
+  if (window.DEEPSEEK_API_KEY) {
     state.deepseekApiKey = window.DEEPSEEK_API_KEY;
+    console.log("🔑 DeepSeek key carregada do config.js");
+  } else {
+    console.log("⚠️ Nenhuma chave DeepSeek no config.js");
+  }
+  updateAIBadge();
+}
+
+function updateAIBadge() {
+  const badge = document.getElementById("aiModeBadge");
+  if (!badge) return;
+  if (state.deepseekApiKey && state.deepseekApiKey.trim() !== "") {
+    badge.textContent = "DeepSeek";
+    badge.className = "ai-badge deepseek";
+  } else {
+    badge.textContent = "Local";
+    badge.className = "ai-badge local";
+  }
+}
+
+// --- SUPABASE CLOUD SYNC ---
+
+function initSupabase() {
+  if (typeof createClient !== "function") {
+    console.warn("⚠️ Supabase JS não carregado");
+    return;
+  }
+  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+    console.warn("⚠️ SUPABASE_URL ou SUPABASE_ANON_KEY não configurados em config.js");
+    return;
+  }
+  try {
+    supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    console.log("☁️ Supabase conectado:", window.SUPABASE_URL);
+  } catch (e) {
+    console.warn("⚠️ Erro ao conectar Supabase:", e.message);
+  }
+}
+
+async function syncFromSupabase() {
+  if (!supabase) return;
+  try {
+    const { data: sData } = await supabase
+      .from("app_state").select("*").limit(1).maybeSingle();
+    if (sData && sData.income > 0) {
+      state.income = Number(sData.income) || 0;
+      state.savingsPercent = sData.savings_percent || 0;
+      state.fixedExpenses = Array.isArray(sData.fixed_expenses) ? sData.fixed_expenses : [];
+      if (sData.categories && typeof sData.categories === "object") {
+        for (const key of Object.keys(state.categories)) {
+          if (sData.categories[key]) {
+            state.categories[key].limit = Number(sData.categories[key].limit) || 0;
+            state.categories[key].spent = Number(sData.categories[key].spent) || 0;
+          }
+        }
+      }
+    }
+
+    const { data: txs } = await supabase
+      .from("transactions").select("*").order("id", { ascending: false }).limit(500);
+    if (txs && txs.length > 0) {
+      state.transactions = txs;
+    }
+
+    const { data: msgs } = await supabase
+      .from("messages").select("*").order("created_at", { ascending: false }).limit(100);
+    if (msgs && msgs.length > 0) {
+      state.messages = msgs.reverse();
+    }
+
+    saveState();
+    console.log("☁️ Dados carregados do Supabase");
+  } catch (e) {
+    console.warn("⚠️ Erro ao carregar do Supabase (usando localStorage):", e.message);
+  }
+}
+
+async function syncToSupabase() {
+  if (!supabase) return;
+  try {
+    const record = {
+      income: state.income,
+      savings_percent: state.savingsPercent,
+      fixed_expenses: state.fixedExpenses,
+      categories: state.categories
+    };
+    const { data: existing } = await supabase
+      .from("app_state").select("id").limit(1).maybeSingle();
+    if (existing) {
+      await supabase.from("app_state").update(record).eq("id", existing.id);
+    } else {
+      await supabase.from("app_state").insert(record);
+    }
+
+    if (state.transactions.length > 0) {
+      await supabase.from("transactions").upsert(state.transactions, { onConflict: "id" });
+    }
+    if (state.messages.length > 0) {
+      await supabase.from("messages").upsert(state.messages, { onConflict: "id" });
+    }
+  } catch (e) {
+    console.warn("⚠️ Erro ao sincronizar com Supabase:", e.message);
   }
 }
 
@@ -492,6 +600,7 @@ function saveSetupWizard() {
   state.savingsPercent = savingsPctVal;
   state.fixedExpenses = parsedExpenses;
   state.deepseekApiKey = document.getElementById("deepseekApiKeyInput").value.trim();
+  updateAIBadge();
 
   // Set limits
   state.categories.alimentacao.limit = parseFloat(document.getElementById("limitAlimentacaoInput").value) || 0;
@@ -563,6 +672,10 @@ function initEventListeners() {
       state.transactions = [];
       state.messages = [];
       state.deepseekApiKey = "";
+      if (window.DEEPSEEK_API_KEY) {
+        state.deepseekApiKey = window.DEEPSEEK_API_KEY;
+      }
+      updateAIBadge();
       
       saveState();
       updateUI();
@@ -932,11 +1045,12 @@ function cleanAndParseJSON(text) {
 
 // --- SOFIA AI NLP DECISION ENGINE ---
 function processSofiaAI(query) {
-  // Se houver chave do DeepSeek cadastrada, usa a inteligência da API na nuvem!
   if (state.deepseekApiKey && state.deepseekApiKey.trim() !== "") {
+    console.log("🤖 Usando DeepSeek AI para:", query);
     processDeepSeekAI(query);
     return;
   }
+  console.log("💻 Usando NLP local para:", query);
 
   const text = query.toLowerCase().trim();
   
@@ -946,22 +1060,28 @@ function processSofiaAI(query) {
 
   // --- PARSE DE ONBOARDING LOCAL DE CONTINGÊNCIA ---
   if (state.income === 0) {
-    if (amount && (text.includes("ganho") || text.includes("renda") || text.includes("receita") || text.includes("líquida") || text.includes("salário") || text.includes("ganhar"))) {
+    if (amount && (text.includes("ganho") || text.includes("renda") || text.includes("receita") || text.includes("líquida") || text.includes("salário") || text.includes("ganhar") || text.includes("sair das dívida") || text.includes("divida") || text.includes("quitar") || /^[\d\s.,]+$/.test(text.replace(/reais|r\$|mil|cento/gi, "").trim()))) {
       state.income = amount;
-      
-      // Verifica se há porcentagem informada (ex: "guardar 15%")
+
       const pctMatches = text.match(/(\d+)\s*%/);
       if (pctMatches) {
         state.savingsPercent = parseInt(pctMatches[1]);
+      } else if (text.includes("divida") || text.includes("sair") || text.includes("quitar")) {
+        state.savingsPercent = 30;
       } else {
-        state.savingsPercent = 15; // padrão
+        state.savingsPercent = 15;
       }
-      
+
       saveState();
       updateUI();
-      
-      const reply = `Excelente! Registrei sua renda mensal de **${formatCurrency(state.income)}** e sua taxa de reserva de **${state.savingsPercent}%** (${formatCurrency((state.income * state.savingsPercent) / 100)}).
-      
+
+      let extraMsg = "";
+      if (text.includes("divida") || text.includes("quitar")) {
+        extraMsg = `\n\n**💡 Como você mencionou dívidas**, já configurei uma taxa de reserva de **${state.savingsPercent}%** para começar a quitar. Depois podemos ajustar juntos!`;
+      }
+
+      const reply = `Excelente! Registrei sua renda mensal de **${formatCurrency(state.income)}** e sua taxa de reserva de **${state.savingsPercent}%** (${formatCurrency((state.income * state.savingsPercent) / 100)}).${extraMsg}
+
 Agora, me conte: quais são as suas **despesas fixas** recorrentes (como Aluguel, Luz, Condomínio) e os seus valores? Exemplo: *"aluguel de 1200 e internet de 100"* ou *"pago 1500 de aluguel"*.`;
       addMessage("ai", reply);
       return;

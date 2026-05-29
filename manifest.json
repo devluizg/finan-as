@@ -2,7 +2,7 @@
   "name": "FinCopilot AI — Sofia",
   "short_name": "FinCopilot",
   "description": "Copiloto financeiro pessoal com IA. Converse, planeje e economize.",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#06070b",
   "theme_color": "#6366f1",
