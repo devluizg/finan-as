@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinCopilot AI — Planeje, Converse e Economize</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- =========================================
+         COLUNA ESQUERDA: LIVE MARGINS & METRICS
+         ========================================= -->
+    <main class="dashboard-column">
+      
+      <!-- Top Header / Brand -->
+      <header class="section-header" style="margin-bottom: 0.5rem;">
+        <div class="logo-container">
+          <div class="logo-icon">
+            <i data-lucide="sparkles" style="width: 1.15rem; height: 1.15rem;"></i>
+          </div>
+          <div>
+            <h1 class="logo-text">FinCopilot AI</h1>
+            <span class="logo-badge">Proativo</span>
+          </div>
+        </div>
+        <button id="editPlanBtn" class="section-action-btn">
+          <i data-lucide="sliders-horizontal" style="width: 0.9rem; height: 0.9rem;"></i>
+          Editar Plano
+        </button>
+      </header>
+
+      <!-- Grid de Visão Geral (Rendimento e Saúde) -->
+      <section class="overview-grid">
+        
+        <!-- Receita / Sobra Mensal -->
+        <div class="glass-card hero-balance-card">
+          <div class="metric-label">
+            <i data-lucide="wallet" style="width: 1rem; height: 1rem; color: var(--primary);"></i>
+            Margem Flexível Restante
+          </div>
+          <div id="remainingTotalFlex" class="metric-value">R$ 0,00</div>
+          
+          <div class="hero-stats-row">
+            <div class="sub-stat">
+              <span id="statMonthlyIncome" class="sub-stat-value">R$ 0,00</span>
+              <span class="sub-stat-label">Renda Mensal</span>
+            </div>
+            <div class="sub-stat">
+              <span id="statFixedExpenses" class="sub-stat-value" style="color: var(--rose);">R$ 0,00</span>
+              <span class="sub-stat-label">Despesas Fixas</span>
+            </div>
+            <div class="sub-stat">
+              <span id="statSavingsRate" class="sub-stat-value" style="color: var(--emerald);">0%</span>
+              <span class="sub-stat-label">Taxa de Reserva</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Saúde Orçamentária Geral -->
+        <div class="glass-card health-card">
+          <div>
+            <div class="metric-label">
+              <i data-lucide="activity" style="width: 1rem; height: 1rem; color: var(--emerald);"></i>
+              Saúde do Orçamento
+            </div>
+            <div class="health-status-indicator">
+              <span id="healthPulse" class="pulse-dot"></span>
+              <span id="healthLabel">Excelente</span>
+            </div>
+          </div>
+          <div>
+            <div class="health-bar-container">
+              <div id="healthBarFill" class="health-bar-fill"></div>
+            </div>
+            <div class="hero-stats-row" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: none; gap: 1rem;">
+              <div class="sub-stat">
+                <span id="healthPercentageText" class="sub-stat-value" style="font-size: 0.95rem;">100% livre</span>
+                <span class="sub-stat-label">Do limite total flexível</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Seção de Margens Ativas (Live Categories) -->
+      <section>
+        <div class="section-header">
+          <h2 class="section-title">
+            <i data-lucide="compass" style="width: 1.15rem; height: 1.15rem; color: var(--primary);"></i>
+            Margens de Gastos em Tempo Real
+          </h2>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">atualização proativa</span>
+        </div>
+
+        <div class="categories-grid" id="categoriesGrid">
+          
+          <!-- Category: Alimentação -->
+          <div id="cat-alimentacao" class="glass-card category-card safe">
+            <div class="category-header">
+              <div class="category-icon-wrapper">
+                <i data-lucide="shopping-cart" style="width: 1.1rem; height: 1.1rem;"></i>
+              </div>
+              <span class="category-tag">Seguro</span>
+            </div>
+            
+            <div class="radial-meter">
+              <svg>
+                <circle class="bg-circle" cx="50" cy="50" r="40"></circle>
+                <circle id="ring-alimentacao" class="fg-circle" cx="50" cy="50" r="40"></circle>
+              </svg>
+              <div class="radial-text-container">
+                <span id="pct-alimentacao" class="radial-percentage">100%</span>
+                <span class="radial-label">Restante</span>
+              </div>
+            </div>
+
+            <h3 class="category-title">Alimentação</h3>
+            <div id="margin-alimentacao" class="margin-amount">R$ 0,00</div>
+            <div id="limit-alimentacao" class="limit-amount">Limite: R$ 0,00</div>
+          </div>
+
+          <!-- Category: Lazer -->
+          <div id="cat-lazer" class="glass-card category-card safe">
+            <div class="category-header">
+              <div class="category-icon-wrapper">
+                <i data-lucide="beer" style="width: 1.1rem; height: 1.1rem;"></i>
+              </div>
+              <span class="category-tag">Seguro</span>
+            </div>
+            
+            <div class="radial-meter">
+              <svg>
+                <circle class="bg-circle" cx="50" cy="50" r="40"></circle>
+                <circle id="ring-lazer" class="fg-circle" cx="50" cy="50" r="40"></circle>
+              </svg>
+              <div class="radial-text-container">
+                <span id="pct-lazer" class="radial-percentage">100%</span>
+                <span class="radial-label">Restante</span>
+              </div>
+            </div>
+
+            <h3 class="category-title">Lazer</h3>
+            <div id="margin-lazer" class="margin-amount">R$ 0,00</div>
+            <div id="limit-lazer" class="limit-amount">Limite: R$ 0,00</div>
+          </div>
+
+          <!-- Category: Transporte -->
+          <div id="cat-transporte" class="glass-card category-card safe">
+            <div class="category-header">
+              <div class="category-icon-wrapper">
+                <i data-lucide="car" style="width: 1.1rem; height: 1.1rem;"></i>
+              </div>
+              <span class="category-tag">Seguro</span>
+            </div>
+            
+            <div class="radial-meter">
+              <svg>
+                <circle class="bg-circle" cx="50" cy="50" r="40"></circle>
+                <circle id="ring-transporte" class="fg-circle" cx="50" cy="50" r="40"></circle>
+              </svg>
+              <div class="radial-text-container">
+                <span id="pct-transporte" class="radial-percentage">100%</span>
+                <span class="radial-label">Restante</span>
+              </div>
+            </div>
+
+            <h3 class="category-title">Transporte</h3>
+            <div id="margin-transporte" class="margin-amount">R$ 0,00</div>
+            <div id="limit-transporte" class="limit-amount">Limite: R$ 0,00</div>
+          </div>
+
+          <!-- Category: Outros -->
+          <div id="cat-outros" class="glass-card category-card safe">
+            <div class="category-header">
+              <div class="category-icon-wrapper">
+                <i data-lucide="credit-card" style="width: 1.1rem; height: 1.1rem;"></i>
+              </div>
+              <span class="category-tag">Seguro</span>
+            </div>
+            
+            <div class="radial-meter">
+              <svg>
+                <circle class="bg-circle" cx="50" cy="50" r="40"></circle>
+                <circle id="ring-outros" class="fg-circle" cx="50" cy="50" r="40"></circle>
+              </svg>
+              <div class="radial-text-container">
+                <span id="pct-outros" class="radial-percentage">100%</span>
+                <span class="radial-label">Restante</span>
+              </div>
+            </div>
+
+            <h3 class="category-title">Outros</h3>
+            <div id="margin-outros" class="margin-amount">R$ 0,00</div>
+            <div id="limit-outros" class="limit-amount">Limite: R$ 0,00</div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Últimas Decisões / Transações -->
+      <section style="margin-top: auto;">
+        <div class="section-header">
+          <h2 class="section-title">
+            <i data-lucide="history" style="width: 1.15rem; height: 1.15rem; color: var(--primary);"></i>
+            Histórico Recente de Decisões
+          </h2>
+          <button id="clearTransactionsBtn" class="section-action-btn" style="color: var(--rose);">
+            Limpar Dados
+          </button>
+        </div>
+
+        <div class="glass-card" style="padding: 1rem;">
+          <div id="transactionList" class="transaction-list">
+            <!-- Injected by JavaScript -->
+            <div class="empty-state">
+              <i data-lucide="smile" style="width: 1.5rem; height: 1.5rem;"></i>
+              <p>Nenhuma compra registrada ainda. Use o chat para começar a conversar!</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- =========================================
+         COLUNA DIREITA: AI COPILOT CHAT
+         ========================================= -->
+    <aside class="chat-column">
+      
+      <!-- Chat Header -->
+      <header class="chat-header">
+        <div class="copilot-status">
+          <div class="copilot-avatar">
+            <i data-lucide="bot" style="width: 1.35rem; height: 1.35rem; color: white;"></i>
+          </div>
+          <div class="copilot-info">
+            <h2>Sofia AI</h2>
+            <p>Copiloto Financeiro Proativo</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="toggleVoiceResponseBtn" class="section-action-btn" title="Ativar Resposta de Voz">
+            <i data-lucide="volume-2" style="width: 0.95rem; height: 0.95rem;"></i>
+            Voz Desativada
+          </button>
+        </div>
+      </header>
+
+      <!-- Chat History -->
+      <div id="chatMessages" class="chat-messages">
+        <!-- Messages injected by JS -->
+      </div>
+
+      <!-- Quick Conversation Suggestions Chips -->
+      <div id="suggestionChips" class="chat-suggestions">
+        <button class="suggestion-chip">Tô no supermercado, quanto posso gastar?</button>
+        <button class="suggestion-chip">Gastei 45 reais com Uber</button>
+        <button class="suggestion-chip">Já comprei leite este mês?</button>
+        <button class="suggestion-chip">Simular gasto de 120 reais no Lazer</button>
+        <button class="suggestion-chip">Como está meu desempenho?</button>
+      </div>
+
+      <!-- Input Bar -->
+      <div class="chat-input-container">
+        <form id="chatForm">
+          <div class="input-wrapper">
+            <input type="text" id="chatInput" class="chat-input" placeholder="Converse com a Sofia... ex: 'Posso gastar 50 no mercado?'" autocomplete="off">
+            <div class="input-actions">
+              <button type="button" id="voiceBtn" class="input-btn voice-btn" title="Falar por voz (Ditado)">
+                <i data-lucide="mic" style="width: 1.15rem; height: 1.15rem;"></i>
+              </button>
+              <button type="submit" class="input-btn send-btn" title="Enviar mensagem">
+                <i data-lucide="arrow-up" style="width: 1.1rem; height: 1.1rem;"></i>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- =========================================
+       MODAL WIZARD DE CONFIGURAÇÃO DE PLANO
+       ========================================= -->
+  <div id="setupModal" class="modal-overlay">
+    <div class="modal-container">
+      
+      <header class="modal-header">
+        <h2 class="modal-title">
+          <i data-lucide="target" style="width: 1.35rem; height: 1.35rem; color: var(--primary);"></i>
+          Configurar Meu Plano Financeiro
+        </h2>
+        <button id="closeModalBtn" class="modal-close">
+          <i data-lucide="x" style="width: 1.2rem; height: 1.2rem;"></i>
+        </button>
+      </header>
+
+      <div class="modal-body">
+        
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.4;">
+          Primeiro, definimos quanto você ganha e quais são seus compromissos fixos. A partir disso, Sofia AI saberá suas margens seguras de gastos mensais e ajudará nas suas escolhas diárias.
+        </p>
+
+        <!-- Etapa 1: Quanto você Ganha -->
+        <div class="form-group">
+          <label class="form-label" for="incomeInput">Sua Receita Mensal Líquida (R$)</label>
+          <input type="number" id="incomeInput" class="form-input" placeholder="ex: 5000" min="0" required>
+        </div>
+
+        <!-- Integração com Inteligência Artificial -->
+        <div class="form-group">
+          <label class="form-label" for="deepseekApiKeyInput">Chave de API do DeepSeek (Opcional — Inteligência Real)</label>
+          <input type="password" id="deepseekApiKeyInput" class="form-input" placeholder="sk-...">
+          <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem; display: block;">
+            Deixe em branco para usar o processamento local (gratuito e instantâneo).
+          </span>
+        </div>
+
+        <!-- Etapa 2: Compromissos Fixos (Dinâmico) -->
+        <div class="form-group">
+          <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+            Despesas Fixas Mensais (Aluguel, contas, assinaturas...)
+            <span style="font-size: 0.75rem; color: var(--text-muted);">deduzido do orçamento principal</span>
+          </label>
+          
+          <div id="fixedExpensesContainer">
+            <!-- Row template loaded in JS -->
+          </div>
+          
+          <button type="button" id="btnAddExpenseRow" class="btn-add-row">
+            <i data-lucide="plus" style="width: 0.9rem; height: 0.9rem;"></i>
+            Adicionar Compromisso Fixo
+          </button>
+        </div>
+
+        <!-- Etapa 3: Reserva Financeira Esperada -->
+        <div class="form-group">
+          <label class="form-label" for="savingsPercentInput">Taxa de Reserva / Poupança (%)</label>
+          <input type="number" id="savingsPercentInput" class="form-input" placeholder="ex: 15" min="0" max="100" required>
+        </div>
+
+        <div style="border-top: 1px solid var(--border-subtle); margin: 1.5rem 0; padding-top: 1.5rem;">
+          <h3 style="font-size: 1rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+            <i data-lucide="pie-chart" style="width: 1rem; height: 1rem; color: var(--primary);"></i>
+            Margens Limites por Categoria (Flexível)
+          </h3>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Seu saldo flexível restante sugerido é: <strong id="suggestedFlexText" style="color: var(--emerald);">R$ 0,00</strong>.
+          </p>
+
+          <div class="category-budget-grid">
+            <div class="form-group">
+              <label class="form-label" for="limitAlimentacaoInput">Alimentação (R$)</label>
+              <input type="number" id="limitAlimentacaoInput" class="form-input" placeholder="ex: 800" min="0" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="limitLazerInput">Lazer & Hobbies (R$)</label>
+              <input type="number" id="limitLazerInput" class="form-input" placeholder="ex: 500" min="0" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="limitTransporteInput">Transporte (R$)</label>
+              <input type="number" id="limitTransporteInput" class="form-input" placeholder="ex: 400" min="0" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="limitOutrosInput">Outros Gastos (R$)</label>
+              <input type="number" id="limitOutrosInput" class="form-input" placeholder="ex: 300" min="0" required>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <footer class="modal-footer">
+        <button id="cancelSetupBtn" class="btn-secondary">Cancelar</button>
+        <button id="saveSetupBtn" class="btn-primary">Salvar e Ativar Plano</button>
+      </footer>
+
+    </div>
+  </div>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Global application keys config -->
+  <script src="config.js"></script>
+  <!-- Main application script -->
+  <script src="app.js"></script>
+</body>
+</html>

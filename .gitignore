@@ -1,0 +1,10 @@
+# Ignorar arquivos de chaves de API locais e configurações secretas
+config.js
+
+# Arquivos do sistema operacional e IDEs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.env
+node_modules/
