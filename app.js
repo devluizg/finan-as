@@ -22,6 +22,35 @@ const state = {
   deepseekApiKey: ""
 };
 
+// --- Safe Local Storage Wrapper ---
+const safeLocalStorage = {
+  _memoryStore: {},
+  getItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("⚠️ LocalStorage inoperante, usando em memória:", e);
+      return this._memoryStore[key] || null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("⚠️ LocalStorage inoperante, salvando em memória:", e);
+      this._memoryStore[key] = String(value);
+    }
+  },
+  removeItem(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn("⚠️ LocalStorage inoperante, removendo da memória:", e);
+      delete this._memoryStore[key];
+    }
+  }
+};
+
 // --- Config and Constants ---
 const STORAGE_KEY = "fincopilot_state_v1";
 let supabase = null;
@@ -36,7 +65,7 @@ const CATEGORY_MAP = {
 };
 
 // --- Application Startup Init ---
-document.addEventListener("DOMContentLoaded", async () => {
+function initApp() {
   if (typeof lucide !== "undefined") {
     lucide.createIcons();
   }
@@ -45,11 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   checkMonthlyReset();
   registerSW();
 
-  if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
-    initSupabase();
-    await syncFromSupabase();
-  }
-
+  // Inicializa a interface e escuta eventos IMEDIATAMENTE para que o app seja funcional sem bloquear
   initEventListeners();
   initSpeechRecognition();
   updateUI();
@@ -59,11 +84,30 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     renderMessages();
   }
-});
+
+  // Sincroniza com o Supabase em segundo plano de forma assíncrona (não-bloqueante)
+  if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+    initSupabase();
+    syncFromSupabase()
+      .then(() => {
+        updateUI();
+        renderMessages();
+      })
+      .catch(e => {
+        console.warn("⚠️ Falha na sincronização em segundo plano do Supabase:", e);
+      });
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
 
 // --- Local Storage Hooks ---
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  safeLocalStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (supabase) {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncToSupabase, 500);
@@ -71,7 +115,7 @@ function saveState() {
 }
 
 function loadState() {
-  const data = localStorage.getItem(STORAGE_KEY);
+  const data = safeLocalStorage.getItem(STORAGE_KEY);
   if (data) {
     try {
       const parsed = JSON.parse(data);
@@ -80,6 +124,32 @@ function loadState() {
       console.error("Erro ao carregar o estado persistido:", e);
     }
   }
+
+  // Garante que todas as propriedades vitais do estado estão bem tipadas e seguras
+  if (!state.categories) state.categories = {};
+  const standardCategories = ["alimentacao", "lazer", "transporte", "outros"];
+  const categoryNames = {
+    alimentacao: "Alimentação",
+    lazer: "Lazer",
+    transporte: "Transporte",
+    outros: "Outros"
+  };
+  standardCategories.forEach(k => {
+    if (!state.categories[k]) {
+      state.categories[k] = { name: categoryNames[k], limit: 0, spent: 0 };
+    } else {
+      if (typeof state.categories[k] !== "object") {
+        state.categories[k] = { name: categoryNames[k], limit: 0, spent: 0 };
+      }
+      state.categories[k].limit = Number(state.categories[k].limit) || 0;
+      state.categories[k].spent = Number(state.categories[k].spent) || 0;
+    }
+  });
+
+  if (!Array.isArray(state.fixedExpenses)) state.fixedExpenses = [];
+  if (!Array.isArray(state.transactions)) state.transactions = [];
+  if (!Array.isArray(state.messages)) state.messages = [];
+  if (state.voiceResponseEnabled === undefined) state.voiceResponseEnabled = false;
 
   if (window.DEEPSEEK_API_KEY) {
     state.deepseekApiKey = window.DEEPSEEK_API_KEY;
@@ -117,7 +187,7 @@ function initSupabase() {
     supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
     console.log("☁️ Supabase conectado:", window.SUPABASE_URL);
   } catch (e) {
-    console.warn("⚠️ Erro ao conectar Supabase:", e.message);
+    console.warn("⚠️ Erro ao conectar Supabase:", e?.message || e);
   }
 }
 
@@ -155,7 +225,7 @@ async function syncFromSupabase() {
     saveState();
     console.log("☁️ Dados carregados do Supabase");
   } catch (e) {
-    console.warn("⚠️ Erro ao carregar do Supabase (usando localStorage):", e.message);
+    console.warn("⚠️ Erro ao carregar do Supabase (usando localStorage):", e?.message || e);
   }
 }
 
@@ -183,7 +253,7 @@ async function syncToSupabase() {
       await supabase.from("messages").upsert(state.messages, { onConflict: "id" });
     }
   } catch (e) {
-    console.warn("⚠️ Erro ao sincronizar com Supabase:", e.message);
+    console.warn("⚠️ Erro ao sincronizar com Supabase:", e?.message || e);
   }
 }
 
@@ -274,21 +344,26 @@ function renderMessages() {
 
   container.innerHTML = "";
   state.messages.forEach(msg => {
+    if (!msg || typeof msg !== "object") return;
+    const sender = msg.sender || "ai";
+    const text = msg.text || "";
+    const timestamp = msg.timestamp || "";
+
     const wrapper = document.createElement("div");
-    wrapper.className = `message-wrapper ${msg.sender}`;
+    wrapper.className = `message-wrapper ${sender}`;
     
     const senderSpan = document.createElement("span");
     senderSpan.className = "message-sender";
-    senderSpan.textContent = msg.sender === "ai" ? "Sofia AI" : "Você";
+    senderSpan.textContent = sender === "ai" ? "Sofia AI" : "Você";
     
     const bubble = document.createElement("div");
     bubble.className = "message-bubble";
     // Convert basic markdown tags (** and *) to simple HTML tags safely
-    bubble.innerHTML = parseMarkdown(msg.text);
+    bubble.innerHTML = parseMarkdown(text);
     
     const timeSpan = document.createElement("span");
     timeSpan.className = "message-time";
-    timeSpan.textContent = msg.timestamp;
+    timeSpan.textContent = timestamp;
     
     wrapper.appendChild(senderSpan);
     wrapper.appendChild(bubble);
@@ -302,6 +377,7 @@ function renderMessages() {
 
 // Helper to render basic bold and list markdown safely
 function parseMarkdown(text) {
+  if (!text || typeof text !== "string") return "";
   let html = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -634,100 +710,141 @@ Estou de prontidão! Pode me consultar a qualquer momento.`);
 
 // --- INTERACTIVE EVENT HANDLERS ---
 function initEventListeners() {
-  // Setup Modal Triggers
-  document.getElementById("editPlanBtn").addEventListener("click", () => openSetupModal(false));
-  document.getElementById("closeModalBtn").addEventListener("click", closeSetupModal);
-  document.getElementById("cancelSetupBtn").addEventListener("click", closeSetupModal);
-  document.getElementById("saveSetupBtn").addEventListener("click", saveSetupWizard);
-  document.getElementById("btnAddExpenseRow").addEventListener("click", addFixedExpenseRow);
-
-  // Keep suggested flex balance calculations fresh in setup
-  document.getElementById("incomeInput").addEventListener("input", updateSuggestedFlexBudget);
-  document.getElementById("savingsPercentInput").addEventListener("input", updateSuggestedFlexBudget);
-  document.body.addEventListener("input", (e) => {
-    if (e.target.classList.contains("exp-amount-input")) {
-      updateSuggestedFlexBudget();
-    }
-  });
-
-  // Chat Submission
-  const form = document.getElementById("chatForm");
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    handleChatSubmit();
-  });
-
-  // Clear data trigger
-  document.getElementById("clearTransactionsBtn").addEventListener("click", () => {
-    const fullReset = confirm("Deseja fazer um RESET TOTAL?\n\nClique em [OK] para apagar TUDO (incluindo plano, despesas e chave API) para testar a criação conversacional com a Sofia.\n\nClique em [Cancelar] para apenas limpar as mensagens e manter seu plano atual.");
-    if (fullReset) {
-      localStorage.removeItem(STORAGE_KEY);
-      state.income = 0;
-      state.savingsPercent = 0;
-      state.fixedExpenses = [];
-      Object.keys(state.categories).forEach(k => {
-        state.categories[k].limit = 0;
-        state.categories[k].spent = 0;
-      });
-      state.transactions = [];
-      state.messages = [];
-      state.deepseekApiKey = "";
-      if (window.DEEPSEEK_API_KEY) {
-        state.deepseekApiKey = window.DEEPSEEK_API_KEY;
-      }
-      updateAIBadge();
-      
-      saveState();
-      updateUI();
-      sendSofiaWelcomeMessage();
+  const registerListener = (id, event, callback) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener(event, callback);
     } else {
-      if (confirm("Deseja limpar apenas o histórico de mensagens do chat e reiniciar os gastos para R$ 0,00?")) {
+      console.warn(`⚠️ Elemento com ID '${id}' não encontrado para o evento '${event}'`);
+    }
+  };
+
+  try {
+    // Setup Modal Triggers
+    registerListener("editPlanBtn", "click", () => openSetupModal(false));
+    registerListener("closeModalBtn", "click", closeSetupModal);
+    registerListener("cancelSetupBtn", "click", closeSetupModal);
+    registerListener("saveSetupBtn", "click", saveSetupWizard);
+    registerListener("btnAddExpenseRow", "click", addFixedExpenseRow);
+
+    // Keep suggested flex balance calculations fresh in setup
+    registerListener("incomeInput", "input", updateSuggestedFlexBudget);
+    registerListener("savingsPercentInput", "input", updateSuggestedFlexBudget);
+    
+    document.body.addEventListener("input", (e) => {
+      if (e.target.classList.contains("exp-amount-input")) {
+        updateSuggestedFlexBudget();
+      }
+    });
+
+    // Chat Submission - Captura o form submit
+    const form = document.getElementById("chatForm");
+    if (form) {
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        handleChatSubmit();
+      });
+    }
+
+    // Captura o clique direto no botão de enviar (segurança adicional)
+    const sendBtn = document.querySelector(".send-btn");
+    if (sendBtn) {
+      sendBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        handleChatSubmit();
+      });
+    }
+
+    // Captura o pressionamento da tecla Enter no input do chat (segurança adicional)
+    const chatInput = document.getElementById("chatInput");
+    if (chatInput) {
+      chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleChatSubmit();
+        }
+      });
+    }
+
+    // Clear data trigger
+    registerListener("clearTransactionsBtn", "click", () => {
+      const fullReset = confirm("Deseja fazer um RESET TOTAL?\n\nClique em [OK] para apagar TUDO (incluindo plano, despesas e chave API) para testar a criação conversacional com a Sofia.\n\nClique em [Cancelar] para apenas limpar as mensagens e manter seu plano atual.");
+      if (fullReset) {
+        safeLocalStorage.removeItem(STORAGE_KEY);
+        state.income = 0;
+        state.savingsPercent = 0;
+        state.fixedExpenses = [];
+        Object.keys(state.categories).forEach(k => {
+          state.categories[k].limit = 0;
+          state.categories[k].spent = 0;
+        });
         state.transactions = [];
         state.messages = [];
-        Object.keys(state.categories).forEach(k => state.categories[k].spent = 0);
+        state.deepseekApiKey = "";
+        if (window.DEEPSEEK_API_KEY) {
+          state.deepseekApiKey = window.DEEPSEEK_API_KEY;
+        }
+        updateAIBadge();
         
         saveState();
         updateUI();
         sendSofiaWelcomeMessage();
+      } else {
+        if (confirm("Deseja limpar apenas o histórico de mensagens do chat e reiniciar os gastos para R$ 0,00?")) {
+          state.transactions = [];
+          state.messages = [];
+          Object.keys(state.categories).forEach(k => state.categories[k].spent = 0);
+          
+          saveState();
+          updateUI();
+          sendSofiaWelcomeMessage();
+        }
       }
+    });
+
+    // Chip Suggestions Triggers
+    const suggestionsBox = document.getElementById("suggestionChips");
+    if (suggestionsBox) {
+      suggestionsBox.addEventListener("click", (e) => {
+        if (e.target.classList.contains("suggestion-chip")) {
+          const query = e.target.textContent;
+          addMessage("user", query);
+          processSofiaAI(query);
+        }
+      });
     }
-  });
 
-  // Chip Suggestions Triggers
-  const suggestionsBox = document.getElementById("suggestionChips");
-  suggestionsBox.addEventListener("click", (e) => {
-    if (e.target.classList.contains("suggestion-chip")) {
-      const query = e.target.textContent;
-      addMessage("user", query);
-      processSofiaAI(query);
+    // Toggle Voice Response Synthesis
+    const voiceToggleBtn = document.getElementById("toggleVoiceResponseBtn");
+    if (voiceToggleBtn) {
+      voiceToggleBtn.addEventListener("click", () => {
+        state.voiceResponseEnabled = !state.voiceResponseEnabled;
+        saveState();
+
+        if (state.voiceResponseEnabled) {
+          voiceToggleBtn.innerHTML = `<i data-lucide="volume-2" style="width: 0.95rem; height: 0.95rem; color: var(--emerald);"></i> Voz Ativada`;
+          // Speak a small test
+          speakText("Voz ativada! Sofia falará com você.");
+        } else {
+          voiceToggleBtn.innerHTML = `<i data-lucide="volume-x" style="width: 0.95rem; height: 0.95rem;"></i> Voz Desativada`;
+          if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+          }
+        }
+        if (typeof lucide !== "undefined") lucide.createIcons();
+      });
     }
-  });
 
-  // Toggle Voice Response Synthesis
-  const voiceToggleBtn = document.getElementById("toggleVoiceResponseBtn");
-  voiceToggleBtn.addEventListener("click", () => {
-    state.voiceResponseEnabled = !state.voiceResponseEnabled;
-    saveState();
-
-    if (state.voiceResponseEnabled) {
-      voiceToggleBtn.innerHTML = `<i data-lucide="volume-2" style="width: 0.95rem; height: 0.95rem; color: var(--emerald);"></i> Voz Ativada`;
-      // Speak a small test
-      speakText("Voz ativada! Sofia falará com você.");
-    } else {
-      voiceToggleBtn.innerHTML = `<i data-lucide="volume-x" style="width: 0.95rem; height: 0.95rem;"></i> Voz Desativada`;
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-    }
-    if (typeof lucide !== "undefined") lucide.createIcons();
-  });
-
-  initTabNavigation();
-  initCameraOCR();
+    initTabNavigation();
+    initCameraOCR();
+  } catch (err) {
+    console.error("❌ Erro ao inicializar ouvintes de eventos:", err);
+  }
 }
 
 function handleChatSubmit() {
   const input = document.getElementById("chatInput");
+  if (!input) return;
   const query = input.value.trim();
   if (!query) return;
 
@@ -1008,7 +1125,7 @@ Exemplo de saída de onboarding (usuário disse que ganha 5000 e quer poupar 15%
     if (typingNode) typingNode.remove();
 
     // Fallback amigável de contingência para NLP Local
-    addMessage("ai", `*Aviso: Tivemos uma falha ao conectar com o DeepSeek (${error.message}). Carregando processamento local de contingência...*`);
+    addMessage("ai", `*Aviso: Tivemos uma falha ao conectar com o DeepSeek (${error?.message || error || 'Erro indefinido'}). Carregando processamento local de contingência...*`);
     setTimeout(() => {
       // Bypassa temporariamente a chave API para forçar execução local
       const tempKey = state.deepseekApiKey;
@@ -1350,7 +1467,7 @@ Como você gostaria de prosseguir?`;
 function checkMonthlyReset() {
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const stored = localStorage.getItem("fincopilot_month");
+  const stored = safeLocalStorage.getItem("fincopilot_month");
 
   if (state.income > 0 && stored && stored !== monthKey) {
     Object.keys(state.categories).forEach(k => {
@@ -1361,7 +1478,7 @@ function checkMonthlyReset() {
     addMessage("ai", `🔄 **Novo mês detectado!** As margens de gastos foram reiniciadas para **${monthKey}**. Bora começar o mês com o pé direito! 🚀`);
   }
 
-  localStorage.setItem("fincopilot_month", monthKey);
+  safeLocalStorage.setItem("fincopilot_month", monthKey);
 }
 
 // --- SERVICE WORKER (PWA) ---
