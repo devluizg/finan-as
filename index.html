@@ -2,13 +2,18 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>FinCopilot AI — Planeje, Converse e Economize</title>
+  <meta name="theme-color" content="#06070b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <div class="app-container">
+  <div class="app-container" data-active-tab="dashboard">
 
     <!-- =========================================
          COLUNA ESQUERDA: LIVE MARGINS & METRICS
@@ -28,7 +33,7 @@
         </div>
         <button id="editPlanBtn" class="section-action-btn">
           <i data-lucide="sliders-horizontal" style="width: 0.9rem; height: 0.9rem;"></i>
-          Editar Plano
+          <span class="btn-label">Editar Plano</span>
         </button>
       </header>
 
@@ -269,19 +274,38 @@
         <form id="chatForm">
           <div class="input-wrapper">
             <input type="text" id="chatInput" class="chat-input" placeholder="Converse com a Sofia... ex: 'Posso gastar 50 no mercado?'" autocomplete="off">
-            <div class="input-actions">
-              <button type="button" id="voiceBtn" class="input-btn voice-btn" title="Falar por voz (Ditado)">
-                <i data-lucide="mic" style="width: 1.15rem; height: 1.15rem;"></i>
-              </button>
-              <button type="submit" class="input-btn send-btn" title="Enviar mensagem">
-                <i data-lucide="arrow-up" style="width: 1.1rem; height: 1.1rem;"></i>
-              </button>
-            </div>
+              <div class="input-actions">
+                <button type="button" id="cameraBtn" class="input-btn" title="Escanear nota fiscal ou QR Code">
+                  <i data-lucide="camera" style="width: 1.15rem; height: 1.15rem;"></i>
+                </button>
+                <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+                <button type="button" id="voiceBtn" class="input-btn voice-btn" title="Falar por voz (Ditado)">
+                  <i data-lucide="mic" style="width: 1.15rem; height: 1.15rem;"></i>
+                </button>
+                <button type="submit" class="input-btn send-btn" title="Enviar mensagem">
+                  <i data-lucide="arrow-up" style="width: 1.1rem; height: 1.1rem;"></i>
+                </button>
+              </div>
           </div>
         </form>
       </div>
 
     </aside>
+
+    <nav class="mobile-nav" id="mobileNav">
+      <button class="nav-tab active" data-tab="dashboard">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Painel</span>
+      </button>
+      <button class="nav-tab" data-tab="chat">
+        <i data-lucide="bot"></i>
+        <span>Sofia</span>
+      </button>
+      <button class="nav-tab" data-tab="config" id="configTabBtn">
+        <i data-lucide="settings"></i>
+        <span>Config</span>
+      </button>
+    </nav>
 
   </div>
 

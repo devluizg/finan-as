@@ -41,6 +41,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   loadState();
+  checkMonthlyReset();
+  registerSW();
   initEventListeners();
   initSpeechRecognition();
 
@@ -606,6 +608,9 @@ function initEventListeners() {
     }
     if (typeof lucide !== "undefined") lucide.createIcons();
   });
+
+  initTabNavigation();
+  initCameraOCR();
 }
 
 function handleChatSubmit() {
@@ -1219,4 +1224,196 @@ Você pode me perguntar algo prático do tipo:
 
 Como você gostaria de prosseguir?`;
   addMessage("ai", fallback);
+}
+
+// --- MONTHLY RESET ---
+function checkMonthlyReset() {
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const stored = localStorage.getItem("fincopilot_month");
+
+  if (state.income > 0 && stored && stored !== monthKey) {
+    Object.keys(state.categories).forEach(k => {
+      state.categories[k].spent = 0;
+    });
+    state.transactions = [];
+    saveState();
+    addMessage("ai", `🔄 **Novo mês detectado!** As margens de gastos foram reiniciadas para **${monthKey}**. Bora começar o mês com o pé direito! 🚀`);
+  }
+
+  localStorage.setItem("fincopilot_month", monthKey);
+}
+
+// --- SERVICE WORKER (PWA) ---
+function registerSW() {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+}
+
+// --- MOBILE TAB NAVIGATION ---
+function initTabNavigation() {
+  const tabs = document.querySelectorAll(".nav-tab");
+  const container = document.querySelector(".app-container");
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      const tabName = tab.dataset.tab;
+      if (tabName === "config") {
+        openSetupModal(false);
+        return;
+      }
+      tabs.forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      container.dataset.activeTab = tabName;
+      if (tabName === "chat") {
+        setTimeout(() => document.getElementById("chatInput")?.focus(), 300);
+      }
+    });
+  });
+}
+
+// --- CAMERA / OCR (NOTA FISCAL) ---
+function initCameraOCR() {
+  const cameraBtn = document.getElementById("cameraBtn");
+  const cameraInput = document.getElementById("cameraInput");
+  if (!cameraBtn || !cameraInput) return;
+
+  cameraBtn.addEventListener("click", () => cameraInput.click());
+
+  cameraInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    await processReceiptOCR(file);
+    cameraInput.value = "";
+  });
+}
+
+async function processReceiptOCR(file) {
+  const overlay = document.createElement("div");
+  overlay.className = "ocr-overlay active";
+  overlay.innerHTML = `
+    <div class="ocr-spinner"></div>
+    <img class="ocr-preview" src="${URL.createObjectURL(file)}">
+    <div class="ocr-status">Preparando leitura da nota...</div>
+  `;
+  document.body.appendChild(overlay);
+
+  try {
+    const Tesseract = await loadTesseractLibrary();
+    const statusEl = overlay.querySelector(".ocr-status");
+
+    statusEl.textContent = "Lendo texto da imagem...";
+    const { data } = await Tesseract.recognize(file, "por", {
+      logger: m => {
+        if (m.status === "recognizing text") {
+          const pct = Math.round(m.progress * 100);
+          statusEl.textContent = `Reconhecendo... ${pct}%`;
+        }
+      }
+    });
+
+    const parsed = parseReceiptText(data.text);
+
+    if (parsed.amount) {
+      overlay.innerHTML = `
+        <div class="ocr-result-box">
+          <div class="ocr-result-category">${state.categories[parsed.category]?.name || parsed.category}</div>
+          <div class="ocr-result-amount">${formatCurrency(parsed.amount)}</div>
+          <div class="ocr-result-desc">${parsed.description}</div>
+        </div>
+        <div class="ocr-actions">
+          <button class="ocr-confirm-btn" id="ocrConfirm">✓ Confirmar</button>
+          <button class="ocr-cancel-btn" id="ocrCancel">Cancelar</button>
+        </div>
+      `;
+      document.getElementById("ocrCancel").addEventListener("click", () => overlay.remove());
+      document.getElementById("ocrConfirm").addEventListener("click", () => {
+        overlay.remove();
+        const msg = `gastei ${parsed.amount} com ${parsed.description}`;
+        addMessage("user", msg);
+        processSofiaAI(msg);
+      });
+    } else {
+      overlay.innerHTML = `
+        <div class="ocr-result-box">
+          <div class="ocr-status">Nenhum valor identificado na imagem.</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;max-height:180px;overflow-y:auto;text-align:left;">
+            <pre style="white-space:pre-wrap;font-size:0.65rem;line-height:1.3;">${data.text.slice(0, 600)}</pre>
+          </div>
+        </div>
+        <div class="ocr-actions">
+          <button class="ocr-cancel-btn" id="ocrCancel">Fechar</button>
+        </div>
+      `;
+      document.getElementById("ocrCancel").addEventListener("click", () => overlay.remove());
+    }
+  } catch (err) {
+    console.error("OCR Error:", err);
+    overlay.innerHTML = `
+      <div class="ocr-status" style="color:var(--rose);">Erro ao processar imagem. Tente novamente.</div>
+      <button class="ocr-cancel-btn" id="ocrCancel" style="margin-top:1rem;">Fechar</button>
+    `;
+    document.getElementById("ocrCancel").addEventListener("click", () => overlay.remove());
+  }
+}
+
+function loadTesseractLibrary() {
+  return new Promise((resolve, reject) => {
+    if (window.Tesseract) {
+      resolve(window.Tesseract);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.onload = () => resolve(window.Tesseract);
+    script.onerror = () => reject(new Error("Falha ao carregar OCR"));
+    document.head.appendChild(script);
+  });
+}
+
+function parseReceiptText(text) {
+  const lines = text.split("\n").filter(l => l.trim());
+  const lowerText = text.toLowerCase();
+
+  let amount = null;
+  const patterns = [
+    /(?:total|valor|soma|total a pagar|total r\$)[:\s]*r?\$?\s*([\d.,]+)/i,
+    /r?\$?\s*([\d.,]+)\s*(?:total|valor)/i,
+    /\b(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\b/,
+    /(?:^|\n)\s*r?\$?\s*([\d.,]+)\s*$/im
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const raw = match[1].replace(/\./g, "").replace(",", ".");
+      const val = parseFloat(raw);
+      if (val > 0 && val < 100000) {
+        amount = val;
+        break;
+      }
+    }
+  }
+
+  if (!amount) {
+    const allNums = text.match(/\b(\d+[.,]\d{2})\b/g);
+    if (allNums) {
+      const vals = allNums.map(n => parseFloat(n.replace(",", "."))).filter(n => n > 0 && n < 50000);
+      if (vals.length > 0) amount = Math.max(...vals);
+    }
+  }
+
+  const storeName = (lines[0] || "Nota Fiscal").replace(/[^a-zà-úA-ZÀ-Ú0-9\s]/g, "").trim().slice(0, 40) || "Nota Fiscal";
+
+  let category = "outros";
+  if (/supermercado|mercado|padaria|feira|hortifruti|carrefour|pão|açúcar|extra|atacadão|são paulo/i.test(lowerText)) {
+    category = "alimentacao";
+  } else if (/uber|taxi|99app|gasolina|posto|estacionamento|pedágio|combustível|oficina|iplace|auto/i.test(lowerText)) {
+    category = "transporte";
+  } else if (/cinema|bar|restaurante|cerveja|lanche|pizza|ifood|show|festa|hamburguer|dogão/i.test(lowerText)) {
+    category = "lazer";
+  }
+
+  return { amount, description: storeName, category };
 }

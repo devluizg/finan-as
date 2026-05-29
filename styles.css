@@ -90,12 +90,12 @@ html, body {
   overflow: hidden;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   .app-container {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: auto;
-    overflow-y: auto;
+    height: 100dvh;
+    overflow: hidden;
+    padding-bottom: 0;
   }
 }
 
@@ -118,14 +118,89 @@ html, body {
   position: relative;
 }
 
-@media (max-width: 1024px) {
-  .dashboard-column {
-    height: auto;
-    overflow-y: visible;
-    padding: 1.5rem;
-  }
+@media (max-width: 1023px) {
+  .dashboard-column,
   .chat-column {
-    height: 600px;
+    display: none;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .dashboard-column {
+    padding: 1.25rem;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    border-right: none;
+  }
+
+  .chat-column {
+    height: 100dvh;
+  }
+
+  .app-container[data-active-tab="dashboard"] .dashboard-column {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app-container[data-active-tab="chat"] .chat-column {
+    display: flex;
+  }
+
+  .chat-messages {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-input-container {
+    padding: 0.75rem 1rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-suggestions {
+    padding: 0 1rem 0.75rem;
+  }
+
+  .chat-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .categories-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+  }
+
+  .section-header {
+    margin-bottom: 0.75rem;
+  }
+
+  .logo-text {
+    font-size: 1.15rem;
+  }
+
+  .metric-value {
+    font-size: 1.75rem;
+  }
+
+  .hero-stats-row {
+    gap: 1rem;
+  }
+
+  .overview-grid {
+    gap: 1rem;
+  }
+
+  .glass-card {
+    padding: 1.1rem;
+  }
+
+  .category-card {
+    padding: 1.25rem 1rem;
+  }
+
+  .message-wrapper {
+    max-width: 90%;
+  }
+
+  #editPlanBtn .btn-label {
+    display: none;
   }
 }
 
@@ -1062,4 +1137,257 @@ h1, h2, h3, h4 {
 .empty-state i {
   font-size: 2rem;
   opacity: 0.5;
+}
+
+/* =========================================
+   MOBILE BOTTOM NAVIGATION
+   ========================================= */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  background: rgba(10, 11, 18, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-subtle);
+  z-index: 200;
+  justify-content: space-around;
+  align-items: stretch;
+}
+
+.nav-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 6px 2px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s;
+  font-size: 0.55rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-height: 44px;
+  position: relative;
+}
+
+.nav-tab i {
+  width: 1.3rem;
+  height: 1.3rem;
+  transition: color 0.2s;
+}
+
+.nav-tab.active {
+  color: var(--primary);
+}
+
+.nav-tab.active i {
+  color: var(--primary);
+}
+
+.nav-tab.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--primary);
+}
+
+@media (min-width: 1024px) {
+  .mobile-nav {
+    display: none !important;
+  }
+}
+
+/* =========================================
+   OCR / CAMERA SCANNING OVERLAY
+   ========================================= */
+.ocr-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(4, 5, 8, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.ocr-overlay.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.ocr-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(99, 102, 241, 0.15);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: ocrSpin 0.8s linear infinite;
+}
+
+@keyframes ocrSpin {
+  to { transform: rotate(360deg); }
+}
+
+.ocr-status {
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 320px;
+}
+
+.ocr-preview {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 1rem;
+  border: 1px solid var(--border-subtle);
+  object-fit: cover;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.ocr-result-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+}
+
+.ocr-result-amount {
+  font-size: 2rem;
+  font-weight: 800;
+  font-family: var(--font-title);
+  color: var(--emerald);
+  margin: 0.5rem 0;
+}
+
+.ocr-result-desc {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.ocr-result-category {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ocr-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.ocr-confirm-btn,
+.ocr-cancel-btn {
+  padding: 0.7rem 1.5rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: none;
+  transition: var(--transition-fast);
+}
+
+.ocr-confirm-btn {
+  background: var(--emerald);
+  color: white;
+}
+
+.ocr-confirm-btn:hover {
+  background: #059669;
+}
+
+.ocr-cancel-btn {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.ocr-cancel-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: white;
+}
+
+/* =========================================
+   PWA / SPLASH SCREEN UTILITIES
+   ========================================= */
+@media (display-mode: standalone) {
+  body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-container {
+    height: 100dvh;
+  }
+}
+
+/* =========================================
+   TOUCH & GENERAL IMPROVEMENTS
+   ========================================= */
+button, 
+input,
+.suggestion-chip,
+.nav-tab {
+  touch-action: manipulation;
+}
+
+input, textarea, button, select {
+  font-size: 16px;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+@media (hover: none) {
+  .glass-card:hover {
+    transform: none;
+    border-color: var(--border-subtle);
+    background: var(--bg-card);
+  }
+
+  .section-action-btn:hover {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border-subtle);
+  }
+
+  .suggestion-chip:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary);
+    border-color: var(--border-subtle);
+  }
 }
